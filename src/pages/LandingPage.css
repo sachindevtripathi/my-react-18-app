@@ -1,0 +1,76 @@
+/* Page fills the viewport; header + two stacked parts share the height. */
+.landing-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 20px;
+  font-family: sans-serif;
+}
+
+.landing-page h1 {
+  margin: 0 0 8px;
+}
+
+/* Part 1 (charts) takes 30% of the remaining height, part 2 (grid) takes 70%.
+   min-height: 0 lets flex children shrink instead of overflowing. */
+.div-part-1 {
+  flex: 3;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  gap: 12px;
+}
+
+.div-part-2 {
+  flex: 7;
+  min-height: 0;
+  width: 100%;
+  margin-top: 12px;
+}
+
+/* Each of the 3 charts gets an equal share of part 1. */
+.chart-box {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: #666;
+  border: 1px dashed #ccc;
+}
+
+/* Watchlist bar sits between the title and the charts. */
+.watchlist-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.watch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+}
+
+.watch-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.muted { color: #888; }
+.error { color: #c00; }

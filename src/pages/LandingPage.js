@@ -1,27 +1,18 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import AgGridWrapper from '../components/AgGridWrapper';
 import HighChartWrapper from '../components/HighChartWrapper';
 import { computeStats } from '../utils/companyStats';
-// Legacy Redux: action creators (plain + thunks) and selectors, all hand-written.
-import { selectTicker } from '../store/actions/uiActions';
-import { fetchCompanies, fetchCompanyByTicker, fetchCompanyQuarters } from '../store/actions/companyActions';
-import { fetchWatchlist, addToWatchlist, removeFromWatchlist } from '../store/actions/watchlistActions';
-import { selectSelectedTicker } from '../store/selectors/uiSelectors';
+// Server state comes from TanStack Query hooks, client state from a React context.
 import {
-  selectCompanies,
-  selectCompaniesError,
-  selectCompaniesLoading,
-  selectCompanyEntry,
-  selectQuartersEntry,
-} from '../store/selectors/companySelectors';
-import {
-  selectWatchlist,
-  selectWatchlistFetching,
-  selectIsAddingToWatchlist,
-  selectWatchlistError,
-} from '../store/selectors/watchlistSelectors';
+  useCompanies,
+  useCompany,
+  useQuarters,
+  useWatchlist,
+  useAddToWatchlist,
+  useRemoveFromWatchlist,
+} from '../queries/companyQueries';
+import { useSelectedTicker } from '../context/SelectedTickerContext';
 import './LandingPage.css';
 
 // Column definitions: `field` maps to a key in each company object returned by the API.
@@ -39,49 +30,28 @@ const columnDefs = [
 ];
 
 function LandingPage() {
-  // dispatch sends actions to the store: plain objects, or thunks (functions)
-  // that redux-thunk runs for us.
-  const dispatch = useDispatch();
   // navigate(path) changes the route from code (here: after a grid row is selected).
   const navigate = useNavigate();
 
-  // ---- Read state with selectors ------------------------------------------------
-  // useSelector subscribes this component to the store and re-renders it when
-  // the selected value changes (compared with ===).
-  const selectedTicker = useSelector(selectSelectedTicker); // null = nothing selected
+  // ---- Client state (context) ---------------------------------------------------
+  const { selectedTicker, setSelectedTicker } = useSelectedTicker(); // null = nothing selected
 
-  const data = useSelector(selectCompanies);
-  const isLoading = useSelector(selectCompaniesLoading);
-  const error = useSelector(selectCompaniesError);
+  // ---- Server state (TanStack Query) --------------------------------------------
+  // Each hook fetches on first render and re-renders the component as the
+  // request progresses. Components that use the same query key share one cache
+  // entry and one request, so React 19 StrictMode's double render is harmless.
+  const { data, isLoading, error } = useCompanies();
 
-  // Per-ticker cache entries: { data, status, error }.
-  const { data: company, error: companyError } = useSelector((state) =>
-    selectCompanyEntry(state, selectedTicker)
-  );
-  const { data: quarters, error: quartersError } = useSelector((state) =>
-    selectQuartersEntry(state, selectedTicker)
-  );
+  // Disabled (no request) while selectedTicker is null.
+  const { data: company, error: companyError } = useCompany(selectedTicker);
+  const { data: quarters, error: quartersError } = useQuarters(selectedTicker);
 
-  const watchlist = useSelector(selectWatchlist);
-  const watchlistFetching = useSelector(selectWatchlistFetching);
-  const adding = useSelector(selectIsAddingToWatchlist);
-  const watchError = useSelector(selectWatchlistError);
-
-  // ---- Trigger fetches --------------------------------------------------------------
-  // The component asks for data explicitly, in an effect. The thunks skip the
-  // request if the data is already cached or loading, so re-running these
-  // effects (e.g. React 19 StrictMode runs them twice in development) is safe.
-  useEffect(() => {
-    dispatch(fetchCompanies());
-    dispatch(fetchWatchlist());
-  }, [dispatch]);
-
-  // Runs whenever the selection changes; does nothing until a row is selected.
-  useEffect(() => {
-    if (!selectedTicker) return;
-    dispatch(fetchCompanyByTicker(selectedTicker));
-    dispatch(fetchCompanyQuarters(selectedTicker));
-  }, [dispatch, selectedTicker]);
+  // isFetching is true during the first load AND during refetches after a mutation.
+  const { data: watchlist = [], isFetching: watchlistFetching, error: watchlistError } = useWatchlist();
+  const add = useAddToWatchlist();
+  const remove = useRemoveFromWatchlist();
+  // Most recent error from either mutation, or from loading the list itself.
+  const watchError = add.error || remove.error || watchlistError;
 
   // One stats object per quarter; each chart plots one metric across the quarters.
   const stats = quarters?.map(computeStats);
@@ -100,14 +70,13 @@ function LandingPage() {
       <h1>Companies{company ? ` – ${company.name} (${company.ticker})` : ''}</h1>
       {error && <p>Oh no, there was an error: {error.status ?? error.message}</p>}
 
-      {/* Watchlist bar: list from the store + buttons that dispatch the mutation thunks */}
+      {/* Watchlist bar: list from useWatchlist + buttons that run the mutations */}
       <div className="watchlist-bar">
         <button
-          disabled={!selectedTicker || adding}
-          // Action creators don't do anything until they are dispatched.
-          onClick={() => dispatch(addToWatchlist(selectedTicker))}
+          disabled={!selectedTicker || add.isPending}
+          onClick={() => add.mutate(selectedTicker)}
         >
-          {adding ? 'Adding...' : `Watch ${selectedTicker ?? ''}`}
+          {add.isPending ? 'Adding...' : `Watch ${selectedTicker ?? ''}`}
         </button>
 
         <span>Watchlist{watchlistFetching ? ' (refreshing...)' : ''}:</span>
@@ -115,7 +84,7 @@ function LandingPage() {
         {watchlist.map((ticker) => (
           <span key={ticker} className="watch-chip">
             {ticker}
-            <button title={`Remove ${ticker}`} onClick={() => dispatch(removeFromWatchlist(ticker))}>×</button>
+            <button title={`Remove ${ticker}`} onClick={() => remove.mutate(ticker)}>×</button>
           </span>
         ))}
         {watchError && <span className="error">Error: {watchError.message}</span>}
@@ -169,7 +138,7 @@ function LandingPage() {
           loading={isLoading}
           height="100%"
           onRowSelected={(row) => {
-            dispatch(selectTicker(row?.ticker));
+            setSelectedTicker(row?.ticker ?? null);
             // Opens the details page; row is undefined when the selection is cleared.
             if (row) navigate(`/company/${row.ticker}`);
           }}

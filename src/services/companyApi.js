@@ -1,9 +1,9 @@
 /**
  * Plain HTTP client for the company API.
  *
- * The HTTP layer knows nothing about Redux: it just returns promises. The
- * thunks in src/store/actions/ call these functions and dispatch actions with
- * the results.
+ * The HTTP layer knows nothing about TanStack Query: it just returns promises.
+ * The hooks in src/queries/companyQueries.js pass these functions to useQuery /
+ * useMutation, which cache the results and track loading and error state.
  */
 
 const BASE_URL = 'http://localhost:4000/api';

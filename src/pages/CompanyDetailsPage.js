@@ -1,18 +1,14 @@
-import React, { useEffect } from 'react';
-import { connect } from 'react-redux';
+import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import HighChartWrapper from '../components/HighChartWrapper';
 import { computeStats } from '../utils/companyStats';
-import { fetchCompanyByTicker, fetchCompanyQuarters } from '../store/actions/companyActions';
-import { fetchWatchlist, addToWatchlist, removeFromWatchlist } from '../store/actions/watchlistActions';
-import { selectCompanyEntry, selectQuartersEntry } from '../store/selectors/companySelectors';
 import {
-  selectIsInWatchlist,
-  selectWatchlistFetching,
-  selectIsAddingToWatchlist,
-  selectIsRemovingFromWatchlist,
-  selectWatchlistError,
-} from '../store/selectors/watchlistSelectors';
+  useCompany,
+  useQuarters,
+  useWatchlist,
+  useAddToWatchlist,
+  useRemoveFromWatchlist,
+} from '../queries/companyQueries';
 import './CompanyDetailsPage.css';
 
 // ASSUMPTION (same as computeStats): revenue and netIncome are in $ millions.
@@ -24,37 +20,26 @@ const period = (q) => `${q.quarter} ${q.fiscalYear}`;
  * Company details page: every field of the company, its last 4 quarters and
  * the derived metrics, plus a Watch / Unwatch button.
  *
- * This component never touches the store itself. It receives everything as
- * props from connect() below: state from mapStateToProps, action creators
- * (already bound to dispatch) from mapDispatchToProps.
+ * The ticker comes from the URL, so this page needs no client state at all:
+ * everything it shows is server state read through TanStack Query hooks. The
+ * landing page uses the same query keys, so whichever page loads a company
+ * first, the other one reads it from the cache without a new request.
  */
-function CompanyDetailsPage({
-  // own prop, passed in by CompanyDetailsRoute
-  ticker,
-  // from mapStateToProps
-  company,
-  companyError,
-  quarters,
-  quartersError,
-  isWatched,
-  watchBusy,
-  watchError,
-  // from mapDispatchToProps
-  fetchCompanyByTicker,
-  fetchCompanyQuarters,
-  fetchWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-}) {
-  // Same effects as on the landing page; the thunks skip cached or in-flight requests.
-  useEffect(() => {
-    fetchWatchlist();
-  }, [fetchWatchlist]);
+export default function CompanyDetailsPage() {
+  const ticker = useParams().ticker.toUpperCase();
 
-  useEffect(() => {
-    fetchCompanyByTicker(ticker);
-    fetchCompanyQuarters(ticker);
-  }, [fetchCompanyByTicker, fetchCompanyQuarters, ticker]);
+  const { data: company, error: companyError } = useCompany(ticker);
+  const { data: quarters, error: quartersError } = useQuarters(ticker);
+
+  const { data: watchlist, isFetching: watchlistFetching, error: watchlistError } = useWatchlist();
+  const add = useAddToWatchlist();
+  const remove = useRemoveFromWatchlist();
+
+  const isWatched = watchlist?.includes(ticker) ?? false;
+  // Disable the button until we know whether the ticker is watched, and while
+  // any watchlist request is in flight.
+  const watchBusy = !watchlist || watchlistFetching || add.isPending || remove.isPending;
+  const watchError = add.error || remove.error || watchlistError;
 
   const error = companyError || quartersError;
   if (error) {
@@ -74,8 +59,6 @@ function CompanyDetailsPage({
     );
   }
 
-  // Derived values are computed during render, not in mapStateToProps:
-  // mapStateToProps must return existing objects, or connect re-renders on every action.
   const stats = quarters.map(computeStats);
   const latest = computeStats(company);
   const periods = quarters.map(period);
@@ -99,7 +82,7 @@ function CompanyDetailsPage({
         </h1>
         <button
           disabled={watchBusy}
-          onClick={() => (isWatched ? removeFromWatchlist(ticker) : addToWatchlist(ticker))}
+          onClick={() => (isWatched ? remove.mutate(ticker) : add.mutate(ticker))}
         >
           {isWatched ? `Unwatch ${ticker}` : `Watch ${ticker}`}
         </button>
@@ -170,49 +153,4 @@ function Stat({ label, value }) {
       <div className="stat-value">{value}</div>
     </div>
   );
-}
-
-// ---- connect() ----------------------------------------------------------------------
-// mapStateToProps(state, ownProps) runs after every dispatched action. connect
-// shallow-compares the returned object with the previous one and re-renders the
-// component only if a value changed. ownProps are the props the parent passed
-// in, here `ticker`, so each instance reads its own company's cache entry.
-const mapStateToProps = (state, { ticker }) => {
-  const companyEntry = selectCompanyEntry(state, ticker);
-  const quartersEntry = selectQuartersEntry(state, ticker);
-  return {
-    company: companyEntry.data,
-    companyError: companyEntry.error,
-    quarters: quartersEntry.data,
-    quartersError: quartersEntry.error,
-    isWatched: selectIsInWatchlist(state, ticker),
-    // Disable the button while any watchlist request is in flight, including
-    // the first load (before it, we don't know whether the ticker is watched).
-    watchBusy:
-      selectWatchlistFetching(state) ||
-      selectIsAddingToWatchlist(state) ||
-      selectIsRemovingFromWatchlist(state),
-    watchError: selectWatchlistError(state),
-  };
-};
-
-// Object shorthand: connect wraps each action creator in dispatch, so the
-// component calls props.addToWatchlist(ticker) instead of
-// dispatch(addToWatchlist(ticker)). The bound functions keep the same identity
-// across renders, so they are safe in useEffect dependency arrays.
-const mapDispatchToProps = {
-  fetchCompanyByTicker,
-  fetchCompanyQuarters,
-  fetchWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-};
-
-const ConnectedCompanyDetailsPage = connect(mapStateToProps, mapDispatchToProps)(CompanyDetailsPage);
-
-// The route renders this. It reads :ticker from the URL (connect has no access
-// to the router) and passes it to the connected page as an own prop.
-export default function CompanyDetailsRoute() {
-  const { ticker } = useParams();
-  return <ConnectedCompanyDetailsPage ticker={ticker.toUpperCase()} />;
 }

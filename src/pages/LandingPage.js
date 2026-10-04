@@ -1,16 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import AgGridWrapper from '../components/AgGridWrapper';
 import HighChartWrapper from '../components/HighChartWrapper';
+// Legacy Redux: action creators (plain + thunks) and selectors, all hand-written.
+import { selectTicker } from '../store/actions/uiActions';
+import { fetchCompanies, fetchCompanyByTicker, fetchCompanyQuarters } from '../store/actions/companyActions';
+import { fetchWatchlist, addToWatchlist, removeFromWatchlist } from '../store/actions/watchlistActions';
+import { selectSelectedTicker } from '../store/selectors/uiSelectors';
 import {
-  useGetCompaniesQuery,
-  useGetCompanyByTickerQuery,
-  useGetCompanyQuartersQuery,
-  useGetWatchlistQuery,
-  useAddToWatchlistMutation,
-  useRemoveFromWatchlistMutation,
-} from '../services/companyApi';
-import { selectTicker, selectSelectedTicker } from '../store/uiSlice';
+  selectCompanies,
+  selectCompaniesError,
+  selectCompaniesLoading,
+  selectCompanyEntry,
+  selectQuartersEntry,
+} from '../store/selectors/companySelectors';
+import {
+  selectWatchlist,
+  selectWatchlistFetching,
+  selectIsAddingToWatchlist,
+  selectWatchlistError,
+} from '../store/selectors/watchlistSelectors';
 import './LandingPage.css';
 
 // Column definitions: `field` maps to a key in each company object returned by the API.
@@ -45,43 +54,53 @@ function computeStats({ revenue, netIncome, employees }) {
 }
 
 function LandingPage() {
-  // Ticker of the row selected in the grid, read from the Redux "ui" slice
-  // (null = nothing selected). Any component can read it the same way.
-  const selectedTicker = useSelector(selectSelectedTicker);
-  // dispatch sends actions such as selectTicker('IBM') to the store.
+  // dispatch sends actions to the store: plain objects, or thunks (functions)
+  // that redux-thunk runs for us.
   const dispatch = useDispatch();
 
-  // RTK Query hook: fetches /companies/ and exposes loading/error state.
-  // `data` is already the array thanks to transformResponse in companyApi.js.
-  const { data, error, isLoading } = useGetCompaniesQuery();
+  // ---- Read state with selectors ------------------------------------------------
+  // useSelector subscribes this component to the store and re-renders it when
+  // the selected value changes (compared with ===).
+  const selectedTicker = useSelector(selectSelectedTicker); // null = nothing selected
 
-  // Fetch the full record for the selected company. `skip` prevents the request
-  // until a row has been selected.
-  const { data: company, error: companyError } = useGetCompanyByTickerQuery(
-    selectedTicker,
-    { skip: !selectedTicker }
+  const data = useSelector(selectCompanies);
+  const isLoading = useSelector(selectCompaniesLoading);
+  const error = useSelector(selectCompaniesError);
+
+  // Per-ticker cache entries: { data, status, error }.
+  const { data: company, error: companyError } = useSelector((state) =>
+    selectCompanyEntry(state, selectedTicker)
+  );
+  const { data: quarters, error: quartersError } = useSelector((state) =>
+    selectQuartersEntry(state, selectedTicker)
   );
 
-  // Last 4 quarters for the selected company (oldest -> newest), used for the line charts.
-  const { data: quarters, error: quartersError } = useGetCompanyQuartersQuery(
-    selectedTicker,
-    { skip: !selectedTicker }
-  );
+  const watchlist = useSelector(selectWatchlist);
+  const watchlistFetching = useSelector(selectWatchlistFetching);
+  const adding = useSelector(selectIsAddingToWatchlist);
+  const watchError = useSelector(selectWatchlistError);
+
+  // ---- Trigger fetches --------------------------------------------------------------
+  // RTK Query hooks fetched on render by themselves. In legacy Redux the
+  // component must ask for data explicitly, in an effect. The thunks skip the
+  // request if the data is already cached or loading, so re-running these
+  // effects (e.g. React 19 StrictMode runs them twice in development) is safe.
+  useEffect(() => {
+    dispatch(fetchCompanies());
+    dispatch(fetchWatchlist());
+  }, [dispatch]);
+
+  // Runs whenever the selection changes; replaces `{ skip: !selectedTicker }`.
+  useEffect(() => {
+    if (!selectedTicker) return;
+    dispatch(fetchCompanyByTicker(selectedTicker));
+    dispatch(fetchCompanyQuarters(selectedTicker));
+  }, [dispatch, selectedTicker]);
 
   // One stats object per quarter; each chart plots one metric across the quarters.
   const stats = quarters?.map(computeStats);
   // x-axis labels, e.g. ["Q3 2025", "Q4 2025", "Q1 2026", "Q2 2026"].
   const periods = quarters?.map((q) => `${q.quarter} ${q.fiscalYear}`) ?? [];
-
-  // Watchlist query: fetched once and cached like any other query.
-  const { data: watchlist = [], isFetching: watchlistFetching } = useGetWatchlistQuery();
-
-  // A mutation hook does NOT run on render. It returns a tuple:
-  //   [triggerFunction, { isLoading, error, ... }]
-  // The request is only sent when you call the trigger function.
-  const [addToWatchlist, { isLoading: adding, error: addError }] = useAddToWatchlistMutation();
-  const [removeFromWatchlist, { error: removeError }] = useRemoveFromWatchlistMutation();
-  const watchError = addError || removeError;
 
   // Message shown instead of the charts when there is nothing to plot.
   let placeholder = null;
@@ -95,13 +114,12 @@ function LandingPage() {
       <h1>Companies{company ? ` – ${company.name} (${company.ticker})` : ''}</h1>
       {error && <p>Oh no, there was an error: {error.status ?? error.message}</p>}
 
-      {/* Watchlist bar: shows the cached getWatchlist result and the mutation buttons */}
+      {/* Watchlist bar: list from the store + buttons that dispatch the mutation thunks */}
       <div className="watchlist-bar">
         <button
           disabled={!selectedTicker || adding}
-          // .unwrap() would turn the result into a promise that throws on error;
-          // here we just read `addError` from the hook instead.
-          onClick={() => addToWatchlist(selectedTicker)}
+          // Action creators don't do anything until they are dispatched.
+          onClick={() => dispatch(addToWatchlist(selectedTicker))}
         >
           {adding ? 'Adding...' : `Watch ${selectedTicker ?? ''}`}
         </button>
@@ -111,10 +129,10 @@ function LandingPage() {
         {watchlist.map((ticker) => (
           <span key={ticker} className="watch-chip">
             {ticker}
-            <button title={`Remove ${ticker}`} onClick={() => removeFromWatchlist(ticker)}>×</button>
+            <button title={`Remove ${ticker}`} onClick={() => dispatch(removeFromWatchlist(ticker))}>×</button>
           </span>
         ))}
-        {watchError && <span className="error">Error: {watchError.data?.error ?? watchError.status}</span>}
+        {watchError && <span className="error">Error: {watchError.message}</span>}
       </div>
 
       {/* Part 1 (30%): stats charts for the selected company */}

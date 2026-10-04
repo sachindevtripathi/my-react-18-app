@@ -1,70 +1,54 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+/**
+ * Plain HTTP client for the company API.
+ *
+ * In the RTK version this file was `createApi(...)`, which generated the
+ * fetching, caching, reducer, middleware AND hooks. In legacy Redux the HTTP
+ * layer knows nothing about Redux: it just returns promises. The thunks in
+ * src/store/actions/ call these functions and dispatch actions with the results.
+ */
 
-// Define a service using a base URL and expected endpoints
-export const companyApi = createApi({
-  reducerPath: 'companyApi',
-  baseQuery: fetchBaseQuery({ baseUrl: 'http://localhost:4000/api/' }),
-  endpoints: (builder) => ({
-    getCompanies: builder.query({
-      query: () => '/companies/',
-      
-      transformResponse: (response) => response.data,
-    }),
+const BASE_URL = 'http://localhost:4000/api';
 
-    // GET /companies/:ticker -> a single company, e.g. getCompanyByTicker('NVDA').
-    // For an unknown ticker the server returns 404; RTK Query exposes that as
-    // `error.status === 404` in the hook result.
-    getCompanyByTicker: builder.query({
-      query: (ticker) => `/companies/${ticker}`,
-    }),
+/**
+ * Small wrapper around fetch().
+ * fetch() only rejects on network failure, NOT on 404/500, so we check
+ * `response.ok` ourselves and throw an error carrying the status and the
+ * server's `{ error: "..." }` message (e.g. "unknown ticker").
+ */
+async function request(path, options = {}) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+  });
 
-    // GET /companies/:ticker/quarters -> last 4 quarters for that company,
-    // intended as the data source for Highcharts / D3 line charts.
-    getCompanyQuarters: builder.query({
-      query: (ticker) => `/companies/${ticker}/quarters`,
-      // Response is { count, data: [...] }; keep only the array (oldest -> newest quarter).
-      transformResponse: (response) => response.data,
-    }),
+  // 204 No Content (e.g. DELETE) has no body to parse.
+  const body = response.status === 204 ? null : await response.json().catch(() => null);
 
-    // ---- Watchlist ----------------------------------------------------------
-    // LEARNING STEP 1: these endpoints deliberately have NO tags yet.
-    // After a mutation succeeds, RTK Query doesn't know getWatchlist is stale,
-    // so the list on screen keeps showing the old cached data.
-    // Step 2 fixes this with providesTags / invalidatesTags.
+  if (!response.ok) {
+    const error = new Error(body?.error || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+}
 
-    // GET /watchlist -> ['AAPL', 'IBM', ...]
-    getWatchlist: builder.query({
-      query: () => '/watchlist',
-      tagTypes: ['Watchlist'], // Mark this query as providing the 'Company' tag
-      providesTags: ['Watchlist'], // Mark this mutation as providing the 'Watchlist' tag
-      transformResponse: (response) => response.data,
-    }),
+// GET /companies -> { count, data: [...] }; we return only the array.
+export const getCompanies = () => request('/companies/').then((body) => body.data);
 
-    // Mutations use builder.mutation and return a request object
-    // (url + method + body) instead of just a URL string.
-    // POST /watchlist { ticker }
-    addToWatchlist: builder.mutation({
-      query: (ticker) => ({ url: '/watchlist', method: 'POST', body: { ticker } }),
-      invalidatesTags: ['Watchlist'], // Mark this mutation as invalidating the 'Watchlist' tag
-    }),
+// GET /companies/:ticker -> single company object (404 if the ticker is unknown).
+export const getCompanyByTicker = (ticker) => request(`/companies/${ticker}`);
 
-    // DELETE /watchlist/:ticker
-    removeFromWatchlist: builder.mutation({
-      query: (ticker) => ({ url: `/watchlist/${ticker}`, method: 'DELETE' }),
-      invalidatesTags: ['Watchlist'], // Mark this mutation as invalidating the 'Watchlist' tag
-    }),
-    }),
-  
-});
+// GET /companies/:ticker/quarters -> { count, data: [...] }, last 4 quarters oldest -> newest.
+export const getCompanyQuarters = (ticker) =>
+  request(`/companies/${ticker}/quarters`).then((body) => body.data);
 
-// Export hooks for usage in functional components, which are auto-generated
-export const {
-  useGetCompaniesQuery,
-  useGetCompanyByTickerQuery,
-  useGetCompanyQuartersQuery,
-  useGetWatchlistQuery,
-  // Mutation hooks are named use<Endpoint>Mutation.
-  useAddToWatchlistMutation,
-  useRemoveFromWatchlistMutation,
-} = companyApi;
-export default companyApi;
+// GET /watchlist -> { count, data: ['AAPL', ...] }
+export const getWatchlist = () => request('/watchlist').then((body) => body.data);
+
+// POST /watchlist { ticker } -> 201 { ticker }
+export const addToWatchlist = (ticker) =>
+  request('/watchlist', { method: 'POST', body: JSON.stringify({ ticker }) });
+
+// DELETE /watchlist/:ticker -> 204
+export const removeFromWatchlist = (ticker) =>
+  request(`/watchlist/${ticker}`, { method: 'DELETE' });

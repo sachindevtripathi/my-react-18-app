@@ -115,7 +115,7 @@ code. Keeping all keys in one object means a query and its invalidation can't dr
 export const useQuarters = (ticker) =>
   useQuery({
     queryKey: queryKeys.quarters(ticker),
-    queryFn: () => api.getCompanyQuarters(ticker),
+    queryFn: ({ signal }) => api.getCompanyQuarters(ticker, { signal }),
     enabled: !!ticker,            // don't fetch until a ticker is selected
   });
 
@@ -131,6 +131,34 @@ const { data: quarters, error, isLoading, isFetching } = useQuarters(selectedTic
 | `isFetching` | Any request in flight, including background refetches |
 
 There is no `useEffect` and no `dispatch`: the hook fetches when the component renders.
+
+### Cancelling requests: `signal`
+TanStack passes every `queryFn` an `AbortSignal`. Each read in `companyApi.js` forwards it to
+`fetch(url, { signal })`. If every component using a query unmounts before its response arrives
+(for example, you open `/company/NVDA` on a slow network and click "← All companies" at once),
+TanStack aborts the request. The Network tab shows it as **(canceled)**, and the query goes back to
+its previous state with no error. Opening the page again fetches it again.
+
+Mutations don't take a signal: aborting a `POST` or `DELETE` midway leaves it unclear whether the
+server applied the change.
+
+#### Why `npm start` shows a canceled request for every query
+In development, React's `<StrictMode>` runs each component's effects, then their cleanups, then the
+effects again. This checks that effects clean up after themselves; production skips it.
+
+`useQuery` registers the component as an **observer** of its query on mount and unregisters it in
+the cleanup. TanStack aborts a request when its observer count drops to 0, but **only if the
+`queryFn` read `signal`**. Otherwise it can't stop the fetch, so it lets it finish.
+
+```
+mount     observers: 1 → no data → start GET #1 ─────────┐
+cleanup   observers: 0 → signal was read → abort GET #1 ✕ (canceled)
+remount   observers: 1 → no data, nothing in flight → start GET #2 ────▶ finished
+```
+
+So in development each query's first request is canceled and sent again. This is the cancellation
+logic working as intended, and production sends each request once. Before the queries used
+`signal`, TanStack let GET #1 finish and the remount joined it, so you saw one request.
 
 ### Mutations: `useMutation` + invalidation
 ```js
@@ -214,8 +242,22 @@ Company not found" immediately.
   only). It shows every key, its status (fresh, stale, fetching, inactive), its data, and buttons
   to refetch or invalidate it by hand.
 - **React DevTools:** select `SelectedTickerProvider` to see the current `selectedTicker`.
-- **React 19 StrictMode** renders twice in development. TanStack combines identical requests,
-  so the Network tab still shows one request per key.
+- **React 19 StrictMode** mounts every component twice in development. Components sharing a key
+  still share one request, but because the queries use `signal`, the first request of each key
+  shows as **(canceled)** and is sent again (see "Why `npm start` shows a canceled request for
+  every query"). Production sends one.
+- **Seeing cancellation:** a request can only be canceled while it is still in flight. The local
+  API answers in a few milliseconds, faster than you can click, so slow the network down first:
+  1. In Chrome DevTools, open the Network tab and choose **"3G"** in the throttling menu. For an
+     even wider window, add a custom profile with **2000 ms latency** under Network conditions →
+     Throttling → Add. "Slow 4G" adds only about half a second, which is hard to beat by hand.
+  2. Open a company you haven't opened yet, for example `/company/NVDA`, and click
+     "← All companies" while it still says "Loading...".
+  3. `/companies/NVDA` and `/companies/NVDA/quarters` show as **(canceled)**, and the landing
+     page loads normally.
+
+  The StrictMode cancellations above need no throttling: the fake unmount happens straight after
+  the mount, before even a local response can arrive.
 
 ---
 
@@ -242,6 +284,7 @@ Company not found" immediately.
 | Error objects | Plain `{ status, data }` | Converted by hand to `{ status, message }` | `Error` instances are fine (not in Redux) |
 | Debugging tool | Redux DevTools | Redux DevTools | TanStack Query Devtools + React DevTools |
 | Read state outside React | `store.getState()` | `store.getState()` | `queryClient.getQueryData(key)` |
+| Request cancellation | Not used in this app | None: responses for an old selection still arrive | `signal` forwarded to `fetch`; aborted when no component needs the data |
 
 ## 2.2 The same feature three ways: fetch the selected company's quarters
 

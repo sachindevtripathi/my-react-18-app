@@ -13,6 +13,10 @@ const BASE_URL = 'http://localhost:4000/api';
  * fetch() only rejects on network failure, NOT on 404/500, so we check
  * `response.ok` ourselves and throw an error carrying the status and the
  * server's `{ error: "..." }` message (e.g. "unknown ticker").
+ *
+ * `options.signal` (an AbortSignal) lets the caller cancel the request: when
+ * the signal is aborted, fetch() stops the request and rejects with an
+ * AbortError. TanStack Query passes one to every queryFn (see companyQueries.js).
  */
 async function request(path, options = {}) {
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -31,18 +35,26 @@ async function request(path, options = {}) {
   return body;
 }
 
+// ---- reads: accept { signal } so an unneeded request can be cancelled ----------------
+
 // GET /companies -> { count, data: [...] }; we return only the array.
-export const getCompanies = () => request('/companies/').then((body) => body.data);
+export const getCompanies = ({ signal } = {}) =>
+  request('/companies/', { signal }).then((body) => body.data);
 
 // GET /companies/:ticker -> single company object (404 if the ticker is unknown).
-export const getCompanyByTicker = (ticker) => request(`/companies/${ticker}`);
+export const getCompanyByTicker = (ticker, { signal } = {}) =>
+  request(`/companies/${ticker}`, { signal });
 
 // GET /companies/:ticker/quarters -> { count, data: [...] }, last 4 quarters oldest -> newest.
-export const getCompanyQuarters = (ticker) =>
-  request(`/companies/${ticker}/quarters`).then((body) => body.data);
+export const getCompanyQuarters = (ticker, { signal } = {}) =>
+  request(`/companies/${ticker}/quarters`, { signal }).then((body) => body.data);
 
 // GET /watchlist -> { count, data: ['AAPL', ...] }
-export const getWatchlist = () => request('/watchlist').then((body) => body.data);
+export const getWatchlist = ({ signal } = {}) =>
+  request('/watchlist', { signal }).then((body) => body.data);
+
+// ---- writes: no signal. Aborting a POST/DELETE midway leaves it unclear whether
+// the server applied the change, so mutations always run to completion. ------------
 
 // POST /watchlist { ticker } -> 201 { ticker }
 export const addToWatchlist = (ticker) =>

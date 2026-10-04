@@ -8,6 +8,10 @@
  *               every component that uses it, and requests for it are
  *               de-duplicated.
  *     queryFn   fetches the data (our plain functions in services/companyApi.js).
+ *               It receives { queryKey, signal, ... }. We pass `signal` on to
+ *               fetch(): if every component using the query unmounts before
+ *               the response arrives (e.g. the user navigates away), TanStack
+ *               aborts the request instead of downloading data nobody needs.
  *     returns   { data, error, isLoading, isFetching, ... }
  *
  *   useMutation({ mutationFn, onSuccess })
@@ -30,14 +34,14 @@ export const queryKeys = {
 
 // GET /companies
 export const useCompanies = () =>
-  useQuery({ queryKey: queryKeys.companies, queryFn: api.getCompanies });
+  useQuery({ queryKey: queryKeys.companies, queryFn: ({ signal }) => api.getCompanies({ signal }) });
 
 // GET /companies/:ticker. `enabled: false` means "don't fetch yet": nothing is
 // requested until a ticker is selected.
 export const useCompany = (ticker) =>
   useQuery({
     queryKey: queryKeys.company(ticker),
-    queryFn: () => api.getCompanyByTicker(ticker),
+    queryFn: ({ signal }) => api.getCompanyByTicker(ticker, { signal }),
     enabled: !!ticker,
   });
 
@@ -45,13 +49,13 @@ export const useCompany = (ticker) =>
 export const useQuarters = (ticker) =>
   useQuery({
     queryKey: queryKeys.quarters(ticker),
-    queryFn: () => api.getCompanyQuarters(ticker),
+    queryFn: ({ signal }) => api.getCompanyQuarters(ticker, { signal }),
     enabled: !!ticker,
   });
 
 // GET /watchlist
 export const useWatchlist = () =>
-  useQuery({ queryKey: queryKeys.watchlist, queryFn: api.getWatchlist });
+  useQuery({ queryKey: queryKeys.watchlist, queryFn: ({ signal }) => api.getWatchlist({ signal }) });
 
 // ---- mutations -------------------------------------------------------------------
 

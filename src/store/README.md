@@ -45,7 +45,7 @@ src/
     ├── actionTypes.js         every action "type" string, defined once
     ├── actions/               action creators
     │   ├── uiActions.js         plain (sync): selectTicker, clearSelectedTicker
-    │   ├── companyActions.js    thunks (async): fetchCompanies, fetchCompanyByTicker, fetchCompanyQuarters
+    │   ├── companyActions.js    thunks (async): fetchCompanies, fetchCompanyByTicker,   
     │   └── watchlistActions.js  thunks (async): fetchWatchlist, addToWatchlist, removeFromWatchlist
     ├── reducers/
     │   ├── index.js             combineReducers -> rootReducer

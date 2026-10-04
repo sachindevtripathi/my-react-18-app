@@ -8,9 +8,8 @@
  *   2. await the API call
  *   3. dispatch ..._SUCCESS with the data, or ..._FAILURE with the error
  *
- * RTK Query did all of this for us, plus caching and de-duplication. Here we
- * do both by hand with getState(): if the data is already loaded or currently
- * loading, we don't send the request again.
+ * The thunks also cache and de-duplicate with getState(): if the data is
+ * already loaded or currently loading, we don't send the request again.
  */
 import * as api from '../../services/companyApi';
 import {
@@ -33,8 +32,7 @@ export const toSerializableError = (error) => ({
   message: error.message,
 });
 
-// Manual cache rule: skip the request if this entry is loading or already loaded.
-// (RTK Query's equivalent: per-argument cache + request de-duplication.)
+// Cache rule: skip the request if this entry is loading or already loaded.
 const shouldFetch = (entry) => entry.status !== 'loading' && entry.status !== 'succeeded';
 
 // ---- GET /companies ---------------------------------------------------------------

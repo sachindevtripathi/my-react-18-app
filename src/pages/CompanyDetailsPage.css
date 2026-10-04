@@ -1,0 +1,78 @@
+/* Unlike the landing page, this page scrolls normally. */
+.company-details {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 20px 32px;
+  font-family: sans-serif;
+}
+
+.details-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+
+.details-header h1 {
+  margin: 0;
+}
+
+.company-details h2 {
+  margin: 24px 0 8px;
+  font-size: 18px;
+}
+
+/* Latest-quarter values as a grid of small cards. */
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.stat-card {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 12px;
+}
+
+.stat-value {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Charts need an explicit height (see HighChartWrapper). */
+.details-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.details-chart {
+  height: 260px;
+  min-width: 0;
+}
+
+.quarters-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.quarters-table th,
+.quarters-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: right;
+}
+
+.quarters-table th:first-child,
+.quarters-table td:first-child {
+  text-align: left;
+}

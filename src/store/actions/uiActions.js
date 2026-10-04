@@ -4,7 +4,6 @@
  * An action creator is just a function that returns an action object.
  * Components call dispatch(selectTicker('IBM')) instead of building
  * { type: SELECT_TICKER, payload: 'IBM' } by hand everywhere.
- * (createSlice generated these for us in the RTK version.)
  */
 import { SELECT_TICKER, CLEAR_SELECTED_TICKER } from '../actionTypes';
 

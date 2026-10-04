@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import AgGridWrapper from '../components/AgGridWrapper';
 import HighChartWrapper from '../components/HighChartWrapper';
+import { computeStats } from '../utils/companyStats';
 // Legacy Redux: action creators (plain + thunks) and selectors, all hand-written.
 import { selectTicker } from '../store/actions/uiActions';
 import { fetchCompanies, fetchCompanyByTicker, fetchCompanyQuarters } from '../store/actions/companyActions';
@@ -36,27 +38,12 @@ const columnDefs = [
   { field: 'hiring', headerName: 'Hiring', valueFormatter: (p) => (p.value ? 'Yes' : 'No') },
 ];
 
-// Rounds to 2 decimals so tooltips/labels stay readable.
-const round = (n) => Math.round(n * 100) / 100;
-
-// Derived ("artificial") stats from revenue, net income and employees.
-// ASSUMPTION: revenue and netIncome are in $ millions, so "* 1000" converts
-// the per-employee figures to $ thousands.
-function computeStats({ revenue, netIncome, employees }) {
-  return {
-    // Share of revenue kept as profit.
-    netProfitMargin: round((netIncome / revenue) * 100),
-    // Sales generated per employee ($K).
-    revenuePerEmployee: round((revenue * 1000) / employees),
-    // Profit generated per employee ($K).
-    netIncomePerEmployee: round((netIncome * 1000) / employees),
-  };
-}
-
 function LandingPage() {
   // dispatch sends actions to the store: plain objects, or thunks (functions)
   // that redux-thunk runs for us.
   const dispatch = useDispatch();
+  // navigate(path) changes the route from code (here: after a grid row is selected).
+  const navigate = useNavigate();
 
   // ---- Read state with selectors ------------------------------------------------
   // useSelector subscribes this component to the store and re-renders it when
@@ -81,8 +68,7 @@ function LandingPage() {
   const watchError = useSelector(selectWatchlistError);
 
   // ---- Trigger fetches --------------------------------------------------------------
-  // RTK Query hooks fetched on render by themselves. In legacy Redux the
-  // component must ask for data explicitly, in an effect. The thunks skip the
+  // The component asks for data explicitly, in an effect. The thunks skip the
   // request if the data is already cached or loading, so re-running these
   // effects (e.g. React 19 StrictMode runs them twice in development) is safe.
   useEffect(() => {
@@ -90,7 +76,7 @@ function LandingPage() {
     dispatch(fetchWatchlist());
   }, [dispatch]);
 
-  // Runs whenever the selection changes; replaces `{ skip: !selectedTicker }`.
+  // Runs whenever the selection changes; does nothing until a row is selected.
   useEffect(() => {
     if (!selectedTicker) return;
     dispatch(fetchCompanyByTicker(selectedTicker));
@@ -175,14 +161,18 @@ function LandingPage() {
         )}
       </div>
 
-      {/* Part 2 (70%): reusable grid wrapper; selecting a row sets the ticker above. */}
+      {/* Part 2 (70%): reusable grid wrapper; selecting a row sets the ticker and opens its details page. */}
       <div className="div-part-2">
         <AgGridWrapper
           rowData={data}
           columnDefs={columnDefs}
           loading={isLoading}
           height="100%"
-          onRowSelected={(row) => dispatch(selectTicker(row?.ticker))}
+          onRowSelected={(row) => {
+            dispatch(selectTicker(row?.ticker));
+            // Opens the details page; row is undefined when the selection is cleared.
+            if (row) navigate(`/company/${row.ticker}`);
+          }}
         />
       </div>
     </div>

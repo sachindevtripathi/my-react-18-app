@@ -6,15 +6,14 @@
  *   dispatch(action)    send an action: middleware, then rootReducer, then new state
  *   subscribe(listener) be notified after every dispatch (react-redux does this for us)
  *
- * Here we wire it up by hand. configureStore in RTK did the same three steps
- * (reducer + thunk middleware + DevTools) automatically.
+ * Here we wire it up in three steps: root reducer + thunk middleware + DevTools.
  */
 import { legacy_createStore as createStore, applyMiddleware, compose } from 'redux';
 import { thunk } from 'redux-thunk';
 import rootReducer from './reducers';
 
-// Redux 5 marks plain `createStore` as deprecated to steer people to RTK.
-// `legacy_createStore` is the same function without the deprecation notice.
+// Redux 5 marks plain `createStore` as deprecated. `legacy_createStore` is the
+// same function without the deprecation notice.
 
 // Redux DevTools browser extension: use its compose if installed, otherwise
 // fall back to the normal compose from redux.

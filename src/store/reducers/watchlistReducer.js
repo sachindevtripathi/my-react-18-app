@@ -11,8 +11,7 @@
  * }
  *
  * `items` is kept while a refetch is loading, so the UI can show the old list
- * plus a "refreshing" hint. That's the isLoading vs isFetching difference from
- * RTK Query, rebuilt in the selectors.
+ * plus a "refreshing" hint (see selectWatchlistFetching).
  */
 import {
   FETCH_WATCHLIST_REQUEST,

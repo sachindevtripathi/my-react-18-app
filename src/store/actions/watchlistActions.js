@@ -4,10 +4,9 @@
  * Query:     fetchWatchlist
  * Mutations: addToWatchlist, removeFromWatchlist
  *
- * In RTK Query, `invalidatesTags: ['Watchlist']` made the list refetch
- * automatically after a mutation. Legacy Redux has no tags: each mutation
+ * After a mutation the list in the store is out of date, so each mutation
  * thunk dispatches fetchWatchlist() itself once the server has confirmed the
- * change. That explicit call replaces the tag system.
+ * change.
  */
 import * as api from '../../services/companyApi';
 import {
@@ -47,7 +46,7 @@ export const addToWatchlist = (ticker) => async (dispatch) => {
   try {
     await api.addToWatchlist(ticker);
     dispatch({ type: ADD_TO_WATCHLIST_SUCCESS, meta: { ticker } });
-    // Manual "invalidation": the server data changed, so reload the list.
+    // The server data changed, so reload the list.
     dispatch(fetchWatchlist());
   } catch (error) {
     dispatch({ type: ADD_TO_WATCHLIST_FAILURE, error: toSerializableError(error), meta: { ticker } });

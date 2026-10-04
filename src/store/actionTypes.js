@@ -11,7 +11,6 @@
  *   ..._REQUEST  request started  -> set loading flag
  *   ..._SUCCESS  response arrived -> store data
  *   ..._FAILURE  request failed   -> store error
- * (createSlice / createAsyncThunk in RTK generate these strings automatically.)
  */
 
 // ---- UI (client state) -------------------------------------------------------

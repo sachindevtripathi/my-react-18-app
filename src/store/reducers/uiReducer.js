@@ -5,8 +5,6 @@
  *  - It never mutates `state`; it returns a new object (spread syntax).
  *  - It never calls APIs, timers or Math.random().
  *  - For actions it doesn't handle, it returns `state` unchanged.
- * (createSlice let us write `state.x = y` because Immer made the copy for us;
- *  here we copy by hand.)
  */
 import { SELECT_TICKER, CLEAR_SELECTED_TICKER } from '../actionTypes';
 

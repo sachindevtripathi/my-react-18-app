@@ -9,8 +9,8 @@
  * }
  * status: 'idle' | 'loading' | 'succeeded' | 'failed'
  *
- * Keying by ticker is our hand-made version of RTK Query's per-argument cache:
- * re-selecting a company reads its existing entry instead of refetching.
+ * Keying by ticker gives every company its own cache entry: re-selecting a
+ * company reads its existing entry instead of refetching.
  */
 import {
   FETCH_COMPANIES_REQUEST,

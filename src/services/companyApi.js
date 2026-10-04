@@ -1,10 +1,9 @@
 /**
  * Plain HTTP client for the company API.
  *
- * In the RTK version this file was `createApi(...)`, which generated the
- * fetching, caching, reducer, middleware AND hooks. In legacy Redux the HTTP
- * layer knows nothing about Redux: it just returns promises. The thunks in
- * src/store/actions/ call these functions and dispatch actions with the results.
+ * The HTTP layer knows nothing about Redux: it just returns promises. The
+ * thunks in src/store/actions/ call these functions and dispatch actions with
+ * the results.
  */
 
 const BASE_URL = 'http://localhost:4000/api';
